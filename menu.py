@@ -14,6 +14,11 @@ class DirectedGraphPlotter:
         self.root = tk.Tk()
         self.root.title("The traveling salesman problem - The nearest neighbour heuristic")
 
+        # some key bindings
+        self.root.bind("<Control-z>", self.cancel_last_action)
+        self.root.bind("<Control-Shift-z>", self.clear_canvas)
+        self.root.bind("<Control-Shift-Z>", self.clear_canvas)
+
         # adding selectable tabs at the top of the window
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True)
@@ -175,7 +180,7 @@ class DirectedGraphPlotter:
         distance = ((pos_v[0] - pos_u[0]) ** 2 + (pos_v[1] - pos_u[1]) ** 2) ** 0.5
         return round(distance, 2)
 
-    def cancel_last_action(self):
+    def cancel_last_action(self, event=None):
         if self.history:
             last_action = self.history.pop()
             if isinstance(last_action, tuple):  # edges in self.history are stored as tuples so this thing removes edges
@@ -192,7 +197,7 @@ class DirectedGraphPlotter:
             self.update_plot()
 
     # just  getting rid of the mess we made on the canvas via button
-    def clear_canvas(self):
+    def clear_canvas(self,event=None):
         self.G.clear()
         self.pos.clear()
         self.history.clear()
