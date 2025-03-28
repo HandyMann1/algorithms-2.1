@@ -1,3 +1,4 @@
+import math
 import tkinter as tk
 import random
 from tkinter import ttk
@@ -6,7 +7,8 @@ import networkx as nx
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-global mod
+global mod_nn
+global mod_ann
 
 
 class DirectedGraphPlotter:
@@ -23,14 +25,10 @@ class DirectedGraphPlotter:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True)
 
-        # Graph creation
+        # graph creation
         self.graph_frame = tk.Frame(self.notebook)
         self.graph_frame.pack(fill=tk.BOTH, expand=True)
         self.notebook.add(self.graph_frame, text="Graph")
-
-        self.hamilton_frame = tk.Frame(self.notebook)
-        self.hamilton_frame.pack(fill=tk.BOTH, expand=True)
-        self.notebook.add(self.hamilton_frame, text="Hamilton Cycle")
 
         # The table with edges
         self.table_frame = tk.Frame(self.graph_frame)
@@ -80,31 +78,89 @@ class DirectedGraphPlotter:
         self.clear_button = tk.Button(self.graph_button_frame, text="Clear Canvas", command=self.clear_canvas)
         self.clear_button.pack(side=tk.LEFT)
 
-        self.choose_mod_button = tk.Button(self.graph_button_frame, text="Choose modification", command=self.choose_mod)
-        self.choose_mod_button.pack(side=tk.LEFT)
-
         self.canvas.mpl_connect('button_press_event', self.onclick)
 
         self.node_select_radius = 0.5
 
-        self.hamilton_button = tk.Button(self.hamilton_frame, text="Find Hamilton Cycle",
-                                         command=self.find_hamilton_cycle)
-        self.hamilton_button.pack()
+        # hamilton nearest neighbour
+        self.nn_frame = tk.Frame(self.notebook)
+        self.nn_frame.pack(fill=tk.BOTH, expand=True)
+        self.notebook.add(self.nn_frame, text="nearest neighbor")
 
-        self.hamilton_cycle_text = tk.Text(self.hamilton_frame, height=5, width=50)
-        self.hamilton_cycle_text.pack()
+        self.nn_hamilton_button = tk.Button(self.nn_frame, text="Find Hamilton Cycle",
+                                            command=self.nn_find_hamilton_cycle)
+        self.nn_hamilton_button.pack()
 
-        self.hamilton_length_label = tk.Label(self.hamilton_frame, text="Cycle Length: ")
-        self.hamilton_length_label.pack()
+        self.nn_hamilton_cycle_text = tk.Text(self.nn_frame, height=5, width=50)
+        self.nn_hamilton_cycle_text.pack()
 
-        self.hamilton_fig = Figure(figsize=(6, 6), dpi=100)
-        self.hamilton_ax = self.hamilton_fig.add_subplot(111)
-        self.hamilton_canvas = FigureCanvasTkAgg(self.hamilton_fig, master=self.hamilton_frame)
-        self.hamilton_canvas.draw()
-        self.hamilton_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        nn_modification_label = tk.Label(self.nn_frame, text="Choose modification type:")
+        nn_modification_label.pack(pady=10)
+
+        global mod_nn
+        nn_no_modification_radio = ttk.Radiobutton(self.nn_frame, text="Classic nearest neighbor algorithm",
+                                                   variable=mod_nn,
+                                                   value=False)
+        nn_modification_radio = ttk.Radiobutton(self.nn_frame, text="Repetitive nearest neighbor algorithm",
+                                                variable=mod_nn,
+                                                value=True)
+        nn_no_modification_radio.pack(pady=5)
+        nn_modification_radio.pack(pady=5)
+
+        nn_confirm_button = ttk.Button(self.nn_frame, text="Confirm", command=self.nn_confirm_mod)
+        nn_confirm_button.pack(pady=10)
+
+        self.nn_hamilton_length_label = tk.Label(self.nn_frame, text="Cycle Length: ")
+        self.nn_hamilton_length_label.pack()
+
+        self.nn_hamilton_fig = Figure(figsize=(6, 6), dpi=100)
+        self.nn_hamilton_ax = self.nn_hamilton_fig.add_subplot(111)
+        self.nn_hamilton_canvas = FigureCanvasTkAgg(self.nn_hamilton_fig, master=self.nn_frame)
+        self.nn_hamilton_canvas.draw()
+        self.nn_hamilton_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.edge_weights = {}
-        self.mod_var = tk.BooleanVar()  # create BooleanVar
+        self.nn_mod_var = tk.BooleanVar()
+
+        # hamilton simulated annealing
+        self.ann_frame = tk.Frame(self.notebook)
+        self.ann_frame.pack(fill=tk.BOTH, expand=True)
+        self.notebook.add(self.ann_frame, text="simulated annealing")
+
+        self.ann_hamilton_button = tk.Button(self.ann_frame, text="Find Hamilton Cycle",
+                                             command=self.ann_find_hamilton_cycle)
+        self.ann_hamilton_button.pack()
+
+        self.ann_hamilton_cycle_text = tk.Text(self.ann_frame, height=5, width=50)
+        self.ann_hamilton_cycle_text.pack()
+
+        ann_modification_label = tk.Label(self.ann_frame, text="Choose modification type:")
+        ann_modification_label.pack(pady=10)
+
+        global mod_ann
+        ann_no_modification_radio = ttk.Radiobutton(self.ann_frame, text="Classic simulated annealing algorithm",
+                                                    variable=mod_ann,
+                                                    value=False)
+        ann_modification_radio = ttk.Radiobutton(self.ann_frame, text="hyperspeed simulated annealing algorithm",
+                                                 variable=mod_ann,
+                                                 value=True)
+        ann_no_modification_radio.pack(pady=5)
+        ann_modification_radio.pack(pady=5)
+
+        ann_confirm_button = ttk.Button(self.ann_frame, text="Confirm", command=self.ann_confirm_mod)
+        ann_confirm_button.pack(pady=10)
+
+        self.ann_hamilton_length_label = tk.Label(self.ann_frame, text="Cycle Length: ")
+        self.ann_hamilton_length_label.pack()
+
+        self.ann_hamilton_fig = Figure(figsize=(6, 6), dpi=100)
+        self.ann_hamilton_ax = self.ann_hamilton_fig.add_subplot(111)
+        self.ann_hamilton_canvas = FigureCanvasTkAgg(self.ann_hamilton_fig, master=self.ann_frame)
+        self.ann_hamilton_canvas.draw()
+        self.ann_hamilton_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.ann_edge_weights = {}
+        self.ann_mod_var = tk.BooleanVar()
 
     def onclick(self, event):
         if event.inaxes == self.ax:
@@ -197,7 +253,7 @@ class DirectedGraphPlotter:
             self.update_plot()
 
     # just  getting rid of the mess we made on the canvas via button
-    def clear_canvas(self,event=None):
+    def clear_canvas(self, event=None):
         self.G.clear()
         self.pos.clear()
         self.history.clear()
@@ -205,30 +261,13 @@ class DirectedGraphPlotter:
         self.edge_weights.clear()
         self.update_plot()
 
-    def choose_mod(self):
-        selection_window = tk.Toplevel(self.root)
-        selection_window.title("Choose modification type:")
+    def nn_confirm_mod(self):
+        global mod_nn
+        mod_nn = self.nn_mod_var.get()
 
-        modification_label = tk.Label(selection_window, text="Choose modification type:")
-        modification_label.pack(pady=10)
-
-        no_modification_radio = ttk.Radiobutton(selection_window, text="Classic nearest neighbor algorithm",
-                                                variable=self.mod_var,
-                                                value=False)
-        modification_radio = ttk.Radiobutton(selection_window, text="Repetitive nearest neighbor algorithm",
-                                             variable=self.mod_var,
-                                             value=True)
-        no_modification_radio.pack(pady=5)
-        modification_radio.pack(pady=5)
-
-        confirm_button = ttk.Button(selection_window, text="Confirm",
-                                    command=lambda: self.confirm_mod(selection_window))
-        confirm_button.pack(pady=20)
-
-    def confirm_mod(self, selection_window):
-        global mod
-        mod = self.mod_var.get()
-        selection_window.destroy()  # close window
+    def ann_confirm_mod(self):
+        global mod_ann
+        mod_ann = self.ann_mod_var.get()
 
     # selectin' the edge to change its weight
     def select_edge(self):
@@ -250,12 +289,12 @@ class DirectedGraphPlotter:
             self.selected_edge = None
 
     # finally, here lies the logic of nearest neighbour heuristic to find the shortest Hamilton cycle
-    def find_hamilton_cycle(self):
+    def nn_find_hamilton_cycle(self):
         if not self.G.nodes():  # just checkin' for empty cycle
-            self.hamilton_cycle_text.delete("1.0", tk.END)
-            self.hamilton_cycle_text.insert(tk.END, "Graph is empty!")
-            self.hamilton_length_label.config(text="Cycle Length: N/A")
-            self.update_hamilton_plot(None)
+            self.nn_hamilton_cycle_text.delete("1.0", tk.END)
+            self.nn_hamilton_cycle_text.insert(tk.END, "Graph is empty!")
+            self.nn_hamilton_length_label.config(text="Cycle Length: N/A")
+            self.nn_update_hamilton_plot(None)
             return
 
         # Create a cost matrix for the graph
@@ -305,27 +344,27 @@ class DirectedGraphPlotter:
             return best_cycle, min_cycle_cost
 
         # find the optimal Hamilton cycle
-        hamilton_cycle, total_length = find_hamiltonian_cycle(self.G, mod=mod)
+        hamilton_cycle, total_length = find_hamiltonian_cycle(self.G, mod=mod_nn)
 
         if hamilton_cycle:
             # display the result
             cycle_str = " -> ".join(hamilton_cycle)
-            self.hamilton_cycle_text.delete("1.0", tk.END)
-            self.hamilton_cycle_text.insert(tk.END, cycle_str)
-            self.hamilton_length_label.config(text=f"Cycle Length: {total_length:.2f}")  # update length label
-            self.update_hamilton_plot(hamilton_cycle)
+            self.nn_hamilton_cycle_text.delete("1.0", tk.END)
+            self.nn_hamilton_cycle_text.insert(tk.END, cycle_str)
+            self.nn_hamilton_length_label.config(text=f"Cycle Length: {total_length:.2f}")  # update length label
+            self.nn_update_hamilton_plot(hamilton_cycle)
         else:
-            self.hamilton_cycle_text.delete("1.0", tk.END)
-            self.hamilton_cycle_text.insert(tk.END, "No Hamilton cycle found.")
-            self.hamilton_length_label.config(text="Cycle Length: N/A")
-            self.update_hamilton_plot(None)
+            self.nn_hamilton_cycle_text.delete("1.0", tk.END)
+            self.nn_hamilton_cycle_text.insert(tk.END, "No Hamilton cycle found.")
+            self.nn_hamilton_length_label.config(text="Cycle Length: N/A")
+            self.nn_update_hamilton_plot(None)
 
-    def update_hamilton_plot(self, path):
-        self.hamilton_ax.clear()
-        self.hamilton_ax.set_xlim(-1, 10)
-        self.hamilton_ax.set_ylim(-1, 10)
-        nx.draw_networkx_nodes(self.G, self.pos, ax=self.hamilton_ax)
-        nx.draw_networkx_labels(self.G, self.pos, ax=self.hamilton_ax)
+    def nn_update_hamilton_plot(self, path):
+        self.nn_hamilton_ax.clear()
+        self.nn_hamilton_ax.set_xlim(-1, 10)
+        self.nn_hamilton_ax.set_ylim(-1, 10)
+        nx.draw_networkx_nodes(self.G, self.pos, ax=self.nn_hamilton_ax)
+        nx.draw_networkx_labels(self.G, self.pos, ax=self.nn_hamilton_ax)
 
         if path:
             edges = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
@@ -333,19 +372,173 @@ class DirectedGraphPlotter:
                 self.G,
                 self.pos,
                 edgelist=edges,
-                ax=self.hamilton_ax,
+                ax=self.nn_hamilton_ax,
                 edge_color='r',
                 width=2,
                 connectionstyle="arc3,rad=0.2",
                 arrows=True,
                 arrowstyle="-|>"
             )
-        self.hamilton_canvas.draw()
+        self.nn_hamilton_canvas.draw()
+
+    # and also simulated annealing logic too
+    def ann_find_hamilton_cycle(self, init_temp=1000, cooling_rate=0.999, iterations=5000, mod=True):
+        if not self.G.nodes():
+            self.ann_hamilton_cycle_text.delete("1.0", tk.END)
+            self.ann_hamilton_cycle_text.insert(tk.END, "Graph is empty!")
+            self.ann_hamilton_length_label.config(text="Cycle Length: N/A")
+            self.ann_update_hamilton_plot(None)
+            return
+
+        # Start with a random cycle
+        nodes = list(self.G.nodes())
+        start_node = random.choice(nodes) if nodes else None
+        initial_path, initial_cost = self.ann_find_init_path([start_node], 0, {})
+        current_cycle = initial_path if initial_path else nodes + [nodes[0]]
+        current_cost = initial_cost if initial_path else float('inf')
+
+        # Initialize best_cycle and best_cost with the initial cycle
+        best_cycle = current_cycle
+        best_cost = current_cost
+        if mod is False:
+            for i in range(iterations):
+                # Get a neighbor cycle by swapping two nodes
+                neighbor_cycle = self.get_neighbor_cycle(current_cycle)
+                neighbor_cost = self.calculate_cycle_cost(neighbor_cycle)
+
+                # Calculate cost difference
+                cost_diff = neighbor_cost - current_cost
+
+                # Acceptance probability
+                if cost_diff < 0 or random.random() < math.exp(-cost_diff / init_temp):
+                    current_cycle = neighbor_cycle
+                    current_cost = neighbor_cost
+
+                # Update best cycle if current cycle is better
+                if current_cost < best_cost:
+                    best_cycle = current_cycle
+                    best_cost = current_cost
+
+                # Cool down
+                init_temp *= cooling_rate
+        else:
+            beta = 0.1
+            init_temp = init_temp
+            for i in range(iterations):
+                neighbor_cycle = self.get_neighbor_cycle(current_cycle)
+                neighbor_cost = self.calculate_cycle_cost(neighbor_cycle)
+
+                # Пропуск недопустимых циклов
+                if neighbor_cost == float('inf'):
+                    continue
+
+                cost_diff = neighbor_cost - current_cost
+
+                # Вероятность Лопатина
+                if cost_diff < 0:
+                    acceptance_prob = 1.0
+                else:
+                    acceptance_prob = 1 / (1 + math.exp(cost_diff / init_temp))
+
+                if random.random() < acceptance_prob:
+                    current_cycle = neighbor_cycle
+                    current_cost = neighbor_cost
+
+                if current_cost < best_cost:
+                    best_cycle = current_cycle
+                    best_cost = current_cost
+
+                init_temp = init_temp / (1 + beta * i)
+                init_temp = max(init_temp, 1e-10)
+
+        # Display the result after the loop finishes
+        if best_cycle:
+            cycle_str = " -> ".join(best_cycle)
+            self.ann_hamilton_cycle_text.delete("1.0", tk.END)
+            self.ann_hamilton_cycle_text.insert(tk.END, cycle_str)
+            self.ann_hamilton_length_label.config(text=f"Cycle Length: {best_cost:.2f}")
+            self.ann_update_hamilton_plot(best_cycle)
+        else:
+            self.ann_hamilton_cycle_text.delete("1.0", tk.END)
+            self.ann_hamilton_cycle_text.insert(tk.END, "No Hamilton cycle found.")
+            self.ann_hamilton_length_label.config(text="Cycle Length: N/A")
+            self.ann_update_hamilton_plot(None)
+
+    def ann_find_init_path(self, current_path, current_cost, cost_matrix):
+        if len(current_path) == len(self.G.nodes()):
+            first = current_path[0]
+            last = current_path[-1]
+            # Проверка направленности ребра
+            if self.G.has_edge(last, first):  # Только прямое ребро
+                return current_path + [first], current_cost + self.calculate_weight(last, first)
+            return None, float('inf')
+
+        last_node = current_path[-1]
+        best_path, min_cost = None, float('inf')
+
+        # Получение только прямых соседей
+        neighbors = list(self.G.successors(last_node))  # Для направленных графов
+
+        for neighbor in random.sample(neighbors, len(neighbors)):
+            if neighbor not in current_path:
+                new_cost = current_cost + self.calculate_weight(last_node, neighbor)
+                path, total_cost = self.ann_find_init_path(current_path + [neighbor], new_cost, cost_matrix)
+                if total_cost < min_cost:
+                    min_cost = total_cost
+                    best_path = path
+        return best_path, min_cost
+
+    def get_neighbor_cycle(self, cycle):
+        i, j = sorted(random.sample(range(1, len(cycle) - 1), 2))
+        neighbor = cycle[:i] + cycle[i:j + 1][::-1] + cycle[j + 1:]
+
+        for k in range(len(neighbor) - 1):
+            u, v = neighbor[k], neighbor[k + 1]
+            if not self.G.has_edge(u, v):  
+                return cycle
+
+        return neighbor
+
+    def calculate_cycle_cost(self, cycle):
+        total_cost = 0
+        for i in range(len(cycle) - 1):
+            u, v = cycle[i], cycle[i + 1]
+            # Проверка только прямых ребер
+            if (u, v) in self.edge_weights:
+                total_cost += self.edge_weights[(u, v)]
+            elif self.G.has_edge(u, v):  # Для графов без весов
+                total_cost += self.calculate_weight(u, v)
+            else:
+                return float('inf')  # Направленное ребро отсутствует
+        return total_cost
+
+    def ann_update_hamilton_plot(self, path):
+        self.ann_hamilton_ax.clear()
+        self.ann_hamilton_ax.set_xlim(-1, 10)
+        self.ann_hamilton_ax.set_ylim(-1, 10)
+        nx.draw_networkx_nodes(self.G, self.pos, ax=self.ann_hamilton_ax)
+        nx.draw_networkx_labels(self.G, self.pos, ax=self.ann_hamilton_ax)
+
+        if path:
+            edges = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
+            nx.draw_networkx_edges(
+                self.G,
+                self.pos,
+                edgelist=edges,
+                ax=self.ann_hamilton_ax,
+                edge_color='r',
+                width=2,
+                connectionstyle="arc3,rad=0.2",
+                arrows=True,
+                arrowstyle="-|>"
+            )
+        self.ann_hamilton_canvas.draw()
 
     def run(self):
         self.root.mainloop()
 
 
-mod = False
+mod_ann = False
+mod_nn = False
 plotter = DirectedGraphPlotter()
 plotter.run()
