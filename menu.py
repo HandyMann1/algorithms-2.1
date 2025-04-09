@@ -382,7 +382,7 @@ class DirectedGraphPlotter:
         self.nn_hamilton_canvas.draw()
 
     # and also simulated annealing logic too
-    def ann_find_hamilton_cycle(self, init_temp=1000, cooling_rate=0.999, iterations=5000, mod=True):
+    def ann_find_hamilton_cycle(self, init_temp=1000, cooling_rate=0.999, iterations=5000, mod=False):
         if not self.G.nodes():
             self.ann_hamilton_cycle_text.delete("1.0", tk.END)
             self.ann_hamilton_cycle_text.insert(tk.END, "Graph is empty!")
@@ -390,51 +390,44 @@ class DirectedGraphPlotter:
             self.ann_update_hamilton_plot(None)
             return
 
-        # Start with a random cycle
         nodes = list(self.G.nodes())
         start_node = random.choice(nodes) if nodes else None
         initial_path, initial_cost = self.ann_find_init_path([start_node], 0, {})
         current_cycle = initial_path if initial_path else nodes + [nodes[0]]
         current_cost = initial_cost if initial_path else float('inf')
 
-        # Initialize best_cycle and best_cost with the initial cycle
         best_cycle = current_cycle
         best_cost = current_cost
         if mod is False:
             for i in range(iterations):
-                # Get a neighbor cycle by swapping two nodes
                 neighbor_cycle = self.get_neighbor_cycle(current_cycle)
                 neighbor_cost = self.calculate_cycle_cost(neighbor_cycle)
 
-                # Calculate cost difference
-                cost_diff = neighbor_cost - current_cost
-
-                # Acceptance probability
-                if cost_diff < 0 or random.random() < math.exp(-cost_diff / init_temp):
-                    current_cycle = neighbor_cycle
-                    current_cost = neighbor_cost
-
-                # Update best cycle if current cycle is better
-                if current_cost < best_cost:
-                    best_cycle = current_cycle
-                    best_cost = current_cost
-
-                # Cool down
-                init_temp *= cooling_rate
-        else:
-            beta = 0.1
-            init_temp = init_temp
-            for i in range(iterations):
-                neighbor_cycle = self.get_neighbor_cycle(current_cycle)
-                neighbor_cost = self.calculate_cycle_cost(neighbor_cycle)
-
-                # Пропуск недопустимых циклов
                 if neighbor_cost == float('inf'):
                     continue
 
                 cost_diff = neighbor_cost - current_cost
 
-                # Вероятность Лопатина
+                if cost_diff < 0 or random.random() < math.exp(-cost_diff / init_temp):
+                    current_cycle = neighbor_cycle
+                    current_cost = neighbor_cost
+
+                if current_cost < best_cost:
+                    best_cycle = current_cycle
+                    best_cost = current_cost
+
+                init_temp *= cooling_rate
+        else:
+            beta = 0.1
+            for i in range(iterations):
+                neighbor_cycle = self.get_neighbor_cycle(current_cycle)
+                neighbor_cost = self.calculate_cycle_cost(neighbor_cycle)
+
+                if neighbor_cost == float('inf'):
+                    continue
+
+                cost_diff = neighbor_cost - current_cost
+
                 if cost_diff < 0:
                     acceptance_prob = 1.0
                 else:
@@ -451,8 +444,10 @@ class DirectedGraphPlotter:
                 init_temp = init_temp / (1 + beta * i)
                 init_temp = max(init_temp, 1e-10)
 
-        # Display the result after the loop finishes
-        if best_cycle:
+        if math.isinf(best_cost):
+            self.ann_hamilton_length_label.config(text="Cycle Length: N/A")
+            self.ann_update_hamilton_plot(None)
+        elif best_cycle:
             cycle_str = " -> ".join(best_cycle)
             self.ann_hamilton_cycle_text.delete("1.0", tk.END)
             self.ann_hamilton_cycle_text.insert(tk.END, cycle_str)
@@ -468,16 +463,14 @@ class DirectedGraphPlotter:
         if len(current_path) == len(self.G.nodes()):
             first = current_path[0]
             last = current_path[-1]
-            # Проверка направленности ребра
-            if self.G.has_edge(last, first):  # Только прямое ребро
+            if self.G.has_edge(last, first):
                 return current_path + [first], current_cost + self.calculate_weight(last, first)
             return None, float('inf')
 
         last_node = current_path[-1]
         best_path, min_cost = None, float('inf')
 
-        # Получение только прямых соседей
-        neighbors = list(self.G.successors(last_node))  # Для направленных графов
+        neighbors = list(self.G.successors(last_node))
 
         for neighbor in random.sample(neighbors, len(neighbors)):
             if neighbor not in current_path:
@@ -494,7 +487,7 @@ class DirectedGraphPlotter:
 
         for k in range(len(neighbor) - 1):
             u, v = neighbor[k], neighbor[k + 1]
-            if not self.G.has_edge(u, v):  
+            if not self.G.has_edge(u, v):
                 return cycle
 
         return neighbor
@@ -503,13 +496,12 @@ class DirectedGraphPlotter:
         total_cost = 0
         for i in range(len(cycle) - 1):
             u, v = cycle[i], cycle[i + 1]
-            # Проверка только прямых ребер
             if (u, v) in self.edge_weights:
                 total_cost += self.edge_weights[(u, v)]
-            elif self.G.has_edge(u, v):  # Для графов без весов
+            elif self.G.has_edge(u, v):
                 total_cost += self.calculate_weight(u, v)
             else:
-                return float('inf')  # Направленное ребро отсутствует
+                return float('inf')
         return total_cost
 
     def ann_update_hamilton_plot(self, path):
