@@ -9,6 +9,7 @@ from matplotlib.figure import Figure
 
 global mod_nn
 global mod_ann
+global mod_aco
 
 
 class DirectedGraphPlotter:
@@ -162,32 +163,92 @@ class DirectedGraphPlotter:
         self.ann_edge_weights = {}
         self.ann_mod_var = tk.BooleanVar()
 
+        # ACO simulated annealing
+
+        self.aco_frame = tk.Frame(self.notebook)
+        self.notebook.add(self.aco_frame, text="ant colony")
+
+        self.aco_controls = tk.Frame(self.aco_frame)
+        self.aco_controls.pack(pady=10)
+
+        self.aco_button_frame = tk.Frame(self.aco_frame)
+        self.aco_button_frame.pack(pady=10)
+
+        self.aco_mod_frame = tk.Frame(self.aco_frame)
+        self.aco_mod_frame.pack(pady=10)
+
+        tk.Label(self.aco_mod_frame, text="ACO Variant:").pack(side=tk.LEFT)
+
+        self.aco_mod_var = tk.BooleanVar()
+        self.aco_classic_radio = ttk.Radiobutton(
+            self.aco_mod_frame,
+            text="Classic ACO",
+            variable=self.aco_mod_var,
+            value=False
+        )
+        self.aco_multi_radio = ttk.Radiobutton(
+            self.aco_mod_frame,
+            text="ACO blanket mode",
+            variable=self.aco_mod_var,
+            value=True
+        )
+        self.aco_classic_radio.pack(side=tk.LEFT, padx=5)
+        self.aco_multi_radio.pack(side=tk.LEFT, padx=5)
+
+        self.aco_confirm_button = ttk.Button(
+            self.aco_mod_frame,
+            text="Confirm Modification",
+            command=self.aco_confirm_mod
+        )
+        self.aco_confirm_button.pack(side=tk.LEFT, padx=10)
+
+        tk.Label(self.aco_controls, text="Ants:").pack(side=tk.LEFT)
+        self.ant_count = tk.Spinbox(self.aco_controls, from_=1, to=1000, width=5)
+        self.ant_count.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(self.aco_controls, text="Iterations:").pack(side=tk.LEFT)
+        self.iterations = tk.Spinbox(self.aco_controls, from_=1, to=10000, width=5)
+        self.iterations.pack(side=tk.LEFT, padx=5)
+
+        self.aco_button = tk.Button(self.aco_button_frame,
+                                    text="Find Hamilton Cycle",
+                                    command=self.aco_find_hamilton_path,
+                                    width=20)
+        self.aco_button.pack(side=tk.LEFT, padx=5)
+
+        self.aco_result = tk.Text(self.aco_frame, height=5, width=50)
+        self.aco_result.pack(pady=10)
+
+        self.aco_hamilton_length_label = tk.Label(self.aco_frame, text="Cycle Length: ")
+        self.aco_hamilton_length_label.pack()
+
+        self.aco_hamilton_fig = Figure(figsize=(6, 6), dpi=100)
+        self.aco_hamilton_ax = self.aco_hamilton_fig.add_subplot(111)
+        self.aco_hamilton_canvas = FigureCanvasTkAgg(self.aco_hamilton_fig, master=self.aco_frame)
+        self.aco_hamilton_canvas.draw()
+        self.aco_hamilton_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
     def onclick(self, event):
         if event.inaxes == self.ax:
-            # trying to find the closest node
             closest_node = self.find_closest_node(event.xdata, event.ydata)
             if closest_node:
                 if self.selected_node:
-                    # Add a directed edge from the selected node to the closest node
                     if (self.selected_node, closest_node) not in self.G.edges():
                         self.G.add_edge(self.selected_node, closest_node)
-                        self.history.append((self.selected_node, closest_node))  # Record action
-                        # Initialize weight for new edge
+                        self.history.append((self.selected_node, closest_node))
                         self.edge_weights[(self.selected_node, closest_node)] = self.calculate_weight(
                             self.selected_node, closest_node)
                     self.selected_node = None
                 else:
-                    # Select the closest node
                     self.selected_node = closest_node
             else:
-                # If no node is selected and none is clicked, add a new node
                 if len(self.G.nodes()) < 26:
                     node_name = f"{chr(ord('a') + len(self.G.nodes()))}"
                 else:
                     node_name = f"node {len(self.G.nodes()) - 25}"
                 self.G.add_node(node_name)
                 self.pos[node_name] = (event.xdata, event.ydata)
-                self.history.append(node_name)  # Record action
+                self.history.append(node_name)
             self.update_plot()
 
     # we basically try to find the closest node to the place where we clicked,
@@ -382,7 +443,7 @@ class DirectedGraphPlotter:
         self.nn_hamilton_canvas.draw()
 
     # and also simulated annealing logic too
-    def ann_find_hamilton_cycle(self, init_temp=1000, cooling_rate=0.999, iterations=5000, mod=False):
+    def ann_find_hamilton_cycle(self, init_temp=1000, cooling_rate=0.9, iterations=5000, mod=False):
         if not self.G.nodes():
             self.ann_hamilton_cycle_text.delete("1.0", tk.END)
             self.ann_hamilton_cycle_text.insert(tk.END, "Graph is empty!")
@@ -525,6 +586,95 @@ class DirectedGraphPlotter:
                 arrowstyle="-|>"
             )
         self.ann_hamilton_canvas.draw()
+    # and, finally, ACO logic
+    def aco_find_hamilton_path(self,alpha=2, beta=2):
+        self.aco_result.delete(1.0, tk.END)
+        if not self.G.nodes():
+            self.aco_result.insert(tk.END, "Graph is empty!")
+            self.aco_hamilton_length_label.config(text="Cycle Length: N/A")
+            self.aco_hamilton_ax.clear()
+            self.aco_hamilton_canvas.draw()
+            return
+
+        nodes = list(self.G.nodes())
+        pheromone = {(u, v): 1.0 for u, v in self.G.edges()}
+        best_path = None
+        best_length = float('inf')
+
+        num_iterations = int(self.iterations.get())
+        use_multi_colony = self.aco_mod_var.get()
+
+        for _ in range(num_iterations):
+
+            if use_multi_colony:
+                starting_nodes = nodes
+            else:
+                starting_nodes = [random.choice(nodes) for _ in range(int(self.ant_count.get()))]
+
+            for start_node in starting_nodes:
+                path = [start_node]
+                unvisited = set(nodes) - {start_node}
+
+                while unvisited:
+                    current = path[-1]
+                    neighbors = [n for n in self.G.neighbors(current) if n in unvisited]
+                    if not neighbors:
+                        break
+
+                    weights = [
+                        (pheromone[(current, n)] ** alpha) * (1 / self.edge_weights.get((current, n), 1)** beta)
+                        for n in neighbors
+                    ]
+                    next_node = random.choices(neighbors, weights=weights)[0]
+                    path.append(next_node)
+                    unvisited.remove(next_node)
+
+                if len(path) == len(nodes) and self.G.has_edge(path[-1], path[0]):
+                    path.append(path[0])
+                    total = sum(self.edge_weights.get((path[i], path[i + 1]), 0)
+                                for i in range(len(path) - 1))
+                    if total < best_length:
+                        best_length = total
+                        best_path = path
+
+        if best_path:
+            self.aco_result.delete(1.0, tk.END)
+            self.aco_result.insert(tk.END, f"{' → '.join(best_path)}\n")
+            self.aco_hamilton_length_label.config(text=f"Cycle Length: {best_length:.2f}")
+            self.plot_aco_path(best_path)
+        else:
+            self.aco_result.insert(tk.END, "No valid cycle found!")
+            self.aco_hamilton_length_label.config(text="Cycle Length: N/A")
+
+    def plot_aco_path(self, path):
+        self.aco_hamilton_ax.clear()
+        self.aco_hamilton_ax.set_xlim(-1, 10)
+        self.aco_hamilton_ax.set_ylim(-1, 10)
+
+        nx.draw_networkx_nodes(self.G, self.pos, ax=self.aco_hamilton_ax)
+        nx.draw_networkx_labels(self.G, self.pos, ax=self.aco_hamilton_ax)
+
+        edges = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
+        nx.draw_networkx_edges(
+            self.G,
+            self.pos,
+            edgelist=edges,
+            edge_color='r',
+            width=2,
+            connectionstyle="arc3,rad=0.2",
+            arrows=True,
+            ax=self.aco_hamilton_ax
+        )
+
+        self.aco_hamilton_canvas.draw()
+
+    def aco_confirm_mod(self):
+        global mod_aco
+        mod_aco = self.aco_mod_var.get()
+        if mod_aco:
+            self.ant_count.config(state='disabled')
+        else:
+            self.ant_count.config(state='normal')
 
     def run(self):
         self.root.mainloop()
